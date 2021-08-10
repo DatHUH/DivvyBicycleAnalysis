@@ -1,0 +1,388 @@
+---
+title: "Behavior of Cyclistic Members vs Casual Riders"
+author: "Jung Huh"
+date: "8/7/2021"
+output:   
+  html_document:
+    toc: true
+    number_sections: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Business Task
+
+### Questions to answer
+How do annual members and casual riders use Cyclistic bikes differently?
+
+### Task Statement
+Find differences in behaviors and annual members and casual riders and provide insights on how Cyclystic can convert the casual riders into annual members
+
+Stakeholders: Marketing Analytics Team, Director of Marketing
+
+***
+
+## Data Sources
+
+### Data Details
+* Data Source: Company Cloud Database ([link](https://divvy-tripdata.s3.amazonaws.com/index.html))
+  + Reliable? Yes
+  + Original? Yes
+  + Comprehensive? Yes
+  + Current? Yes
+  + Cited? Yes
+  
+
+* Currently, data is organized by each month.
+* Data has been made available by this [license](https://www.divvybikes.com/data-license-agreement)
+
+* Categorization of Member vs Casual
+  + Single rides & Full day purchases are logged under Casual
+  + Annual membership purcahses are logged under Member
+
+***
+
+## Cleaning and Preparing Data
+
+### Importing Data
+
+#### Install packages
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(readr)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(data.table)
+```
+#### Collect data
+
+```{r message=FALSE, warning=FALSE}
+setwd("C:/Users/Albert/Desktop/Cyclistic_Data/CSV")
+
+Jun_2021 <- read_csv("202106-divvy-tripdata.csv")
+May_2021 <- read_csv("202105-divvy-tripdata.csv")
+Apr_2021 <- read_csv("202104-divvy-tripdata.csv")
+Mar_2021 <- read_csv("202103-divvy-tripdata.csv")
+Feb_2021 <- read_csv("202102-divvy-tripdata.csv")
+Jan_2021 <- read_csv("202101-divvy-tripdata.csv")
+Dec_2020 <- read_csv("202012-divvy-tripdata.csv")
+Nov_2020 <- read_csv("202011-divvy-tripdata.csv")
+Oct_2020 <- read_csv("202010-divvy-tripdata.csv")
+Sep_2020 <- read_csv("202009-divvy-tripdata.csv")
+Aug_2020 <- read_csv("202008-divvy-tripdata.csv")
+Jul_2020 <- read_csv("202007-divvy-tripdata.csv")
+```
+### Cleaning and Preparing Data
+#### Inspecting column to combine data into a single dataframe
+
+* Extracting column names from latest monthly data and comparing it to rest using check_columns function
+* check_columns function
+  + returns "Matching Columns' if column names match
+  + returns "Mismatching Columns' if column names do **not** match
+
+
+```{r message=FALSE, warning=FALSE}
+print(colnames(Jun_2021))
+column_names <- colnames(Jun_2021)
+
+check_columns <- function(monthlydata){
+  if (column_names != colnames(monthlydata)){
+    print('Mismatching Columns')
+  } else {
+    print('Mathcing Columns')
+  }
+}
+
+check_columns(May_2021)
+check_columns(Apr_2021)
+check_columns(Mar_2021)
+check_columns(Feb_2021)
+check_columns(Jan_2021)
+check_columns(Dec_2020)
+check_columns(Nov_2020)
+check_columns(Oct_2020)
+check_columns(Sep_2020)
+check_columns(Aug_2020)
+check_columns(Jul_2020)
+
+```
+#### Inspecting column attribute types
+
+```{r}
+
+str(Jun_2021)
+str(May_2021)
+str(Apr_2021)
+str(Mar_2021)
+str(Feb_2021)
+str(Jan_2021)
+str(Dec_2020)
+str(Nov_2020)
+str(Oct_2020)
+str(Sep_2020)
+str(Aug_2020)
+str(Jul_2020)
+```
+* Found out that start_station_id and end_station_id are in different data types in Nov_2020 - Jun_2020
+
+#### Stacking monthly data into a data frame
+
+* Changing data types for congruency
+* Creating a master data frame called oneYear_data
+
+```{r message=FALSE, warning=FALSE}
+Nov_2020 <- mutate(Nov_2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+Oct_2020 <- mutate(Oct_2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+Sep_2020 <- mutate(Sep_2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+Aug_2020 <- mutate(Aug_2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+Jul_2020 <- mutate(Jul_2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+
+
+oneYear_data <- bind_rows(Jun_2021, May_2021, Apr_2021, Mar_2021, Feb_2021, Jan_2021, Dec_2020, Nov_2020, Oct_2020, Sep_2020, Aug_2020, Jul_2020)
+head(oneYear_data)
+```
+
+
+#### Checking for data consistency
+* Checking for consistency in categorical columns
+
+```{r}
+table(oneYear_data$member_casual)
+table(oneYear_data$rideable_type)
+```
+
+#### Inspecting the new data table
+
+```{r}
+colnames(oneYear_data)
+nrow(oneYear_data)
+dim(oneYear_data)
+head(oneYear_data)
+str(oneYear_data)
+summary(oneYear_data)
+```
+#### Adding new columns
+
+##### Seprating day, month, year from started_at
+
+```{r}
+oneYear_data$date <- as.Date(oneYear_data$started_at)
+oneYear_data$month <- format(as.Date(oneYear_data$date), '%m')
+oneYear_data$day <- format(as.Date(oneYear_data$date), '%d')
+oneYear_data$year <- format(as.Date(oneYear_data$date), '%Y')
+oneYear_data$day_of_week <- format(as.Date(oneYear_data$date), '%A')
+```
+
+
+##### Adding 'ride_duration' column
+
+```{r}
+oneYear_data$ride_duration <- difftime(oneYear_data$ended_at, oneYear_data$started_at)
+```
+
+#### Removing 'bad' data
+
+* Removing data with negative or zero (less than 1 second) ride_duration
+  + Some rows had negative duration 
+  + After some research, we can conclude that these bikes were taken out of circulation for quality control
+```{r}
+negative_duration <- filter(oneYear_data, ride_duration < 1)
+str(negative_duration)
+nrow(negative_duration)
+```
+* Removing data with ride duration of one **day** and more
+  + Upon reviewing company's policy on bike rentals of more than 24 hours, bikes that have been rented for 24+ hours are treated as **stolen** or **missing**
+  
+```{r}
+oneYear_data_V3 <-filter(oneYear_data, ride_duration >= 1 & ride_duration < 60*60*24)
+nrow(oneYear_data_V3)
+```
+* Removing data resulting from internal tests
+  + Testing data are not relevant to the analysis
+
+```{r}
+nrow(subset(oneYear_data_V3, start_station_name %like% "TEST"))
+nrow(subset(oneYear_data_V3, start_station_name %like% "test"))
+nrow(subset(oneYear_data_V3, start_station_name %like% "Test"))
+```
+```{r}
+oneYear_data_V4 <- filter(oneYear_data_V3, !(oneYear_data_V3$start_station_name %like% "TEST" | oneYear_data_V3$start_station_name %like% "test"))
+nrow(oneYear_data_V4)
+```
+
+
+## Analysis
+
+### Taking a look at some statistical values
+
+#### Average ride duration of Members vs Casuals
+
+```{r}
+aggregate(oneYear_data_V4$ride_duration ~ oneYear_data_V4$member_casual, FUN = mean)
+```
+#### Median ride duration of Members vs Casuals
+
+```{r}
+aggregate(oneYear_data_V4$ride_duration ~ oneYear_data_V4$member_casual, FUN = median)
+```
+
+#### Max. and Min. ride duration of Members vc Casuals
+
+```{r}
+aggregate(oneYear_data_V4$ride_duration ~ oneYear_data_V4$member_casual, FUN = max)
+aggregate(oneYear_data_V4$ride_duration ~ oneYear_data_V4$member_casual, FUN = min)
+aggregate(oneYear_data_V4$ride_duration ~ oneYear_data_V4$member_casual, FUN = sd)
+```
+
+#### Examining ride duration for a weekday for Members vs Casuals
+
+
+```{r}
+oneYear_data_V4$day_of_week <- ordered(oneYear_data_V4$day_of_week, levels = c("Sunday", "Monday", 'Tuesday', 'Wednesday', 'Thursday', 'Friday' , 'Saturday'))
+aggregate(oneYear_data_V4$ride_duration ~ oneYear_data_V4$member_casual + oneYear_data_V4$day_of_week, FUN = mean)
+```
+
+#### Examining number of rides and ride duration for a weekday for Members vs Casuals
+
+
+```{r message=FALSE, warning=FALSE}
+oneYear_data_V4 %>% 
+  mutate(weekday = lubridate::wday(started_at, label = TRUE)) %>% 
+           group_by(member_casual, weekday) %>% 
+           summarise(number_of_rides = n(), average_duration = mean(ride_duration)) %>% 
+           arrange(member_casual, weekday)
+```
+
+## Data Viz and Key Fidings
+
+### Members vs Casuals - Number of Rides each day of the Week
+
+```{r}
+oneYear_data_V4 %>% 
+  mutate(weekday = lubridate::wday(started_at, label = TRUE)) %>% 
+           group_by(member_casual, weekday) %>% 
+           summarise(number_of_rides = n(), average_duration = mean(ride_duration)) %>% 
+           arrange(member_casual, weekday) %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge") + xlab("Day of the Week") + ylab('Number of Rides') + ggtitle("Number of Rides of Members vs Casuals")
+
+ggsave('Number_of_Rides.png')
+```
+
+
+### Members vs Casuals - Average Ride Duration
+
+
+```{r}
+oneYear_data_V4 %>% 
+  mutate(weekday = lubridate::wday(started_at, label = TRUE)) %>% 
+           group_by(member_casual, weekday) %>% 
+           summarise(number_of_rides = n(), average_duration = mean(ride_duration)) %>% 
+           arrange(member_casual, weekday) %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge") + xlab("Day of the Week") + ylab('Average Ride Duration (sec)') + ggtitle("Average Ride Durations of Members vs Casuals")
+
+ggsave('Average_Ride_Duration.png')
+```
+
+
+### Members vs Casuals - Number of Rides each Month
+
+```{r}
+oneYear_data_V4 %>% 
+  group_by(member_casual, month) %>% 
+  summarise(total_rides = n()) %>% 
+  ggplot(aes(x = month, y = total_rides, fill = member_casual)) +
+  geom_col(position = 'dodge') + xlab("Months") +ylab("Number of Rides") +ggtitle("Number of Rides each Month")
+```
+### Members vs Casuals - Number of Rides by each Hour
+
+```{r}
+oneYear_data_V4$time <- format(oneYear_data_V4$started_at, format = '%H:%M')
+oneYear_data_V4$time <- as.POSIXct(oneYear_data_V4$time, format = '%H')
+oneYear_data_V4 %>% 
+  group_by(member_casual, time) %>% 
+  summarise(total_rides = n()) %>% 
+  ggplot(aes(x = time, y = total_rides, color = member_casual, group = member_casual)) +
+  geom_line() + scale_x_datetime(date_breaks = "1 hour", minor_breaks = NULL,
+date_labels = "%H", expand = c(0,0)) + xlab('Hour') + ylab('Total Rides') +ggtitle("Number of Rides by Hour")
+```
+
+### Key Findings and Disclaimer
+
+#### Key Findings
+
+* Ride Numbers:
+  + Casual riders' ride numbers increase significantly on weekends (Friday - Sunday)
+  + **56%** of all casual riders trips were recorded on weekends
+  + Member riders' ride numbers stay mostly consistent except beginning of the week (Monday & Tuesday)
+
+```{r}
+nrow(subset(oneYear_data_V4, member_casual == 'casual' & (day_of_week == 'Friday' | day_of_week == 'Saturday' | day_of_week == 'Sunday'))) / nrow(subset(oneYear_data_V4, member_casual == 'casual'))
+```
+
+
+* Ride Duration:
+  + Casual riders' average ride duration increases significantly on weekends(Friday - Sunday)
+  + Member riders' average ride duration stays consistent except on Saturdays & Sundays
+  + In comparison, trips of casual riders were **twice** as long as trips of members
+  
+* Casual riders are more actively renting bikes in the warmer months
+  + **48%** casual rider trips were recorded between June to August
+  + Only 38% or member rider trips were recorded in the same time frame
+  
+```{r}
+nrow(subset(oneYear_data_V4, member_casual == 'casual' & (month == "06" | month == "07" | month == "08"))) / nrow(subset(oneYear_data_V4, member_casual == 'casual'))
+```
+```{r}
+nrow(subset(oneYear_data_V4, member_casual == 'member' & (month == "06" | month == "07" | month == "08"))) / nrow(subset(oneYear_data_V4, member_casual == 'member'))
+```
+
+
+* Casual riders tend to rent significantly less in the 'rush' hours
+  + Referencing the plot "Number of Rides by Hour", the biggest differences are displayed at approximately between Hour 7, 8, 14, and 15.
+  + Casual riders
+  
+
+
+
+
+#### Disclaimer 
+
+* Data Removal:
+  + Data with negative ride duration were removed 
+  + Data with ride duration of greater than 24 hours were removed
+  
+* Possible Bias:
+  + May have introduced sampling bias by removing rides where ride duration was negative or greater than 24 hours
+  
+## Recommendations
+
+### First
+
+* Create marketing strategy and new membership program targeting Casual riders on weekends (Friday - Sunday)
+  + Casual riders ride **more and longer** on weekends
+  + New membership program more suited for weekends riders is strong recommended
+
+### Second
+
+* Accommodate riders quicker in the morning rush hours
+  + Biggest difference in number of rides between members and non-members are found during rush hours
+  + Casual riders may opt out of riding a bike if it takes more than a minute or two to rent/find one
+  + Consolidating the rental process during rush hours recommended  
+
+### Third
+
+* Create a database with unique ID for each rider instead of each trip
+  + It will enable deeper analysis on specific subsets of riders
+  + Understanding characteristics of casual riders and their trips can provide valuable information that can be used in user conversion
