@@ -1,2 +1,3 @@
 # DivvyBicycleAnalysis
-R Analysis 
+Anlaysis done in R
+Mainfile: .rmd
